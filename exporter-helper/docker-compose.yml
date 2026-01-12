@@ -1,0 +1,32 @@
+services:
+  # OpenTelemetry Collector with Exporter Helper Batching (crash-proof)
+  collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector-exporter-helper
+    command: ["--config=/etc/otelcol-contrib/otelcol-config.yaml"]
+    volumes:
+      - ./otelcol-config.yaml:/etc/otelcol-contrib/otelcol-config.yaml
+      - ./storage:/tmp/otel-storage  # Persistent storage volume
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics
+      - "8889:8889"   # Prometheus exporter metrics
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # Jaeger backend for trace visualization
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger-exporter-helper
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14250:14250" # Jaeger gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+
+networks:
+  default:
+    name: otel-exporter-helper-network

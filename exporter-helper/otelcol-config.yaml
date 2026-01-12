@@ -1,0 +1,65 @@
+# OpenTelemetry Collector Configuration - Exporter Helper Batching (Crash-Proof)
+# This configuration demonstrates crash-proof data handling with persistent storage
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Memory limiter to prevent OOM (good practice)
+  memory_limiter:
+    limit_mib: 256
+    check_interval: 1s
+
+extensions:
+  # File storage extension for persistent queues
+  file_storage:
+    directory: /tmp/otel-storage
+    timeout: 10s
+    create_directory: true
+    compaction:
+      directory: /tmp/otel-storage/compact
+      on_start: true
+      on_rebound: true
+
+exporters:
+  # OTLP exporter with integrated batching and persistent storage
+  otlp:
+    endpoint: http://jaeger:4317
+    tls:
+      insecure: true
+    
+    # Persistent sending queue - survives crashes
+    sending_queue:
+      enabled: true
+      storage: file_storage    # Uses persistent storage extension
+      queue_size: 1000         # Queue holds 1000 batches
+      num_consumers: 5         # Parallel export workers
+    
+    # Retry configuration
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Debug exporter for troubleshooting
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [file_storage]  # Enable persistent storage
+  
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter]  # No batch processor needed!
+      exporters: [otlp, debug]
+
+  telemetry:
+    logs:
+      level: info

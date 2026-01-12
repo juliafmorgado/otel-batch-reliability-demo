@@ -1,0 +1,50 @@
+# OpenTelemetry Collector Configuration - Batch Processor (Vulnerable to Data Loss)
+# This configuration demonstrates the data loss vulnerability of the batch processor
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor - stores data in memory-only Go channels
+  # VULNERABILITY: Data is lost if collector crashes before export
+  batch:
+    timeout: 60s          # Longer timeout - data sits in memory longer
+    send_batch_size: 1000 # Larger batch size - less likely to trigger early
+    send_batch_max_size: 2000
+
+  # Memory limiter to prevent OOM (good practice)
+  memory_limiter:
+    limit_mib: 256
+    check_interval: 1s
+
+exporters:
+  # OTLP exporter to Jaeger - with intentional connection issue for demo
+  otlp:
+    endpoint: http://jaeger:4317
+    tls:
+      insecure: true
+    timeout: 1s  # Short timeout to cause initial failures
+    # Note: No persistent storage available at exporter level
+    # when using batch processor approach
+
+  # Debug exporter for troubleshooting
+  debug:
+    verbosity: basic
+
+service:
+  extensions: []
+  
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]  # Batch processor in pipeline
+      exporters: [otlp, debug]
+
+  telemetry:
+    logs:
+      level: info

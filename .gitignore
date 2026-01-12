@@ -1,0 +1,51 @@
+# OpenTelemetry Collector Storage
+exporter-helper/storage/
+batch-processor/storage/
+
+# Docker volumes
+**/storage/
+**/data/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+
+# Docker Compose override files
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test results
+test-results/
+results/
+*.xml
+*.json
+
+# Backup files
+*.bak
+*.backup
