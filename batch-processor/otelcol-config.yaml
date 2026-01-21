@@ -13,9 +13,9 @@ processors:
   # Batch processor - stores data in memory-only Go channels
   # VULNERABILITY: Data is lost if collector crashes before export
   batch:
-    timeout: 60s          # Longer timeout - data sits in memory longer
-    send_batch_size: 1000 # Larger batch size - less likely to trigger early
-    send_batch_max_size: 2000
+    timeout: 300s         # Very long timeout (5 min) -> ensures data stays in memory during crash
+    send_batch_size: 10000 # Very large batch -> prevents early flush
+    send_batch_max_size: 20000
 
   # Memory limiter to prevent OOM (good practice)
   memory_limiter:
@@ -23,14 +23,14 @@ processors:
     check_interval: 1s
 
 exporters:
-  # OTLP exporter to Jaeger - with intentional connection issue for demo
+  # OTLP exporter to Jaeger
+  # NOTE: No sending_queue.storage configured (data only in memory)
   otlp:
     endpoint: http://jaeger:4317
     tls:
       insecure: true
-    timeout: 1s  # Short timeout to cause initial failures
-    # Note: No persistent storage available at exporter level
-    # when using batch processor approach
+    timeout: 30s
+    # CRITICAL: No persistent storage available at exporter level (relies on batch processor's in-memory queues)
 
   # Debug exporter for troubleshooting
   debug:
@@ -47,4 +47,7 @@ service:
 
   telemetry:
     logs:
-      level: info
+      level: debug  # Verbose logging to trace span lifecycle
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
