@@ -62,4 +62,7 @@ service:
 
   telemetry:
     logs:
-      level: info
+      level: debug  # Verbose logging to trace span lifecycle
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
