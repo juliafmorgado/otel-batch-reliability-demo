@@ -16,9 +16,17 @@ From the OpenTelemetry maintainers: *"The primary reason for introducing the new
 ## What This Demo Proves
 Our crash tests provide empirical evidence for the reliability claims in the official issue, demonstrating the exact architectural shift the OpenTelemetry community is implementing.
 
-**Key Finding**: When an OpenTelemetry Collector crashes:
+**Key Finding**: When an OpenTelemetry Collector crashes ungracefully (SIGKILL):
 - **Batch Processor**: 100% data loss (0 traces recovered)
 - **Exporter Helper**: 0% data loss (100% traces recovered)
+
+**Important Scope Notes:**
+- This demo focuses on **traces** for simplicity (same behavior applies to metrics and logs)
+- Crash scenario uses **SIGKILL** (ungraceful termination) which mimics:
+  - Kubernetes pod eviction without grace period
+  - OOM killer termination
+  - Hardware failure / power loss
+  - Force kill operations
 
 The demo consists of:
 - **Two Collector configurations**: One using batch processor, one using exporter helper with persistent storage
@@ -41,39 +49,41 @@ The demo consists of:
 
 ### Running the Batch Processor Test (Data Loss)
 
-1. **Start the environment**:
-   ```bash
-   ./run_test.sh batch-processor
-   ```
+```bash
+./run_test.sh batch-processor
+```
 
-2. **Check Jaeger** (should show 0 traces):
-   - Open http://localhost:16686
-   - Search for traces - you'll see none
-
-3. **Restart Collector**:
-   ```bash
-   docker-compose -f batch-processor/docker-compose.yml up collector -d
-   ```
-
-4. **Result**: No traces recovered, **100% data loss**
+**What happens:**
+1. Sends 100 traces to Collector
+2. Waits for spans to be accepted (2s)
+3. Crashes Collector with SIGKILL (ungraceful)
+4. Verifies 0 traces in Jaeger
+5. Restarts Collector
+6. Still 0 traces → **100% data loss confirmed**
 
 ### Running the Exporter Helper Test (Data Recovery)
 
-1. **Start the environment**:
-   ```bash
-   ./run_test.sh exporter-helper
-   ```
+```bash
+./run_test.sh exporter-helper
+```
 
-2. **Check Jaeger** (should show 0 traces initially):
-   - Open http://localhost:16686
-   - Search for traces - you'll see none yet
+**What happens:**
+1. Sends 100 traces to Collector
+2. Waits for spans to be accepted (2s)
+3. Crashes Collector with SIGKILL (ungraceful)
+4. Verifies 0 traces in Jaeger (not yet exported)
+5. Restarts Collector
+6. All 100 traces appear → **0% data loss confirmed**
 
-3. **Restart Collector**:
-   ```bash
-   docker-compose -f exporter-helper/docker-compose.yml up collector -d
-   ```
+### Running Reproducibility Test
 
-4. **Result**: All 100 traces recovered, **0% data loss**
+Prove the results are consistent:
+
+```bash
+ITERATIONS=5 ./run_test.sh reproducibility
+```
+
+**Expected:** 100% success rate for both tests across all iterations
 
 ## Test Results Summary
 
@@ -128,13 +138,20 @@ service:
 
 The automated test script (`run_test.sh`) performs these steps:
 
-1. **Clean Environment**: Removes any existing storage
+1. **Clean Environment**: Removes any existing storage and containers
 2. **Start Services**: Launches Collector and Jaeger
 3. **Send Data**: Uses `telemetrygen` to send 100 traces
-4. **Wait**: Allows data to enter Collector's internal queues
-5. **Simulate Crash**: Forcefully kills the Collector container
-6. **Verify Loss**: Confirms no traces visible in Jaeger
-7. **Test Recovery**: Restarts Collector and measures data recovery
+4. **Wait for Acceptance**: 2 seconds to ensure spans are received by Collector
+5. **Verify Acceptance**: Check logs and storage files
+6. **Simulate Crash**: Forcefully kills Collector with SIGKILL (ungraceful)
+7. **Verify Loss**: Confirms no traces visible in Jaeger
+8. **Test Recovery**: Restarts Collector and measures data recovery
+
+**Critical timing:**
+- Crash happens at ~3 seconds after sending
+- Batch timeout is 300 seconds (5 minutes)
+- Batch size is 10,000 spans (100 traces won't trigger)
+- This ensures data is accepted but NOT yet exported when crash occurs
 
 
 ## Understanding the Results
@@ -167,15 +184,12 @@ The demo validates the technical benefits outlined in the official design docume
 - Enhanced control in counting queue and batch sizes using exporter-specific data models  
 - Optional counting of queue and batch sizes in bytes of serialized data
 
-## Learn More
+## External Resources
 - [OpenTelemetry Collector Documentation](https://opentelemetry.io/docs/collector/)
 - [Exporter Helper Documentation](https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/exporterhelper/README.md)
 - [Batch Processor Documentation](https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor/README.md)
+- [Issue #8122: Deprecate Batch Processor](https://github.com/open-telemetry/opentelemetry-collector/issues/8122)
 
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Important**: This demo is for educational purposes. Always test configurations in your specific environment before production deployment.
